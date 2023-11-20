@@ -1,44 +1,41 @@
 version: "3"
-name: "tcdicn-line"
+name: "line"
+
+# All clients are in the same group
+# Nodes are connected as such:
+#
+# a - b - c - d - e - f
+#
 
 services:
-
   a:
-    extends:
-      file: basic.yml
-      service: sensor
+    extends: { file: common.yml, service: controller }
     networks: [ ab ]
-    environment: [ TCDICN_ID=my_cool_sensor ]
-
+    environment: [ TCDICN_ID=my_sensor ]
   b:
-    extends:
-      file: basic.yml
-      service: node
+    extends: { file: common.yml, service: inspector }
     networks: [ ab, bc ]
-
+    environment: [ TCDICN_ID=my_sensor ]
   c:
-    extends:
-      file: basic.yml
-      service: node
+    extends: { file: common.yml, service: drone }
     networks: [ bc, cd ]
-
+    environment: [ TCDICN_ID=my_sensor ]
   d:
-    extends:
-      file: basic.yml
-      service: actuator
-    networks: [ cd ]
-    environment: [ TCDICN_ID=my_cool_actuator ]
+    extends: { file: common.yml, service: inspector }
+    networks: [ cd, de ]
+    environment: [ TCDICN_ID=my_sensor ]
+  e:
+    extends: { file: common.yml, service: drone }
+    networks: [ de, ef ]
+    environment: [ TCDICN_ID=my_sensor ]
+  f:
+    extends: { file: common.yml, service: controller }
+    networks: [ ef ]
+    environment: [ TCDICN_ID=my_sensor ]
 
 networks:
-  ab:
-    ipam:
-      config:
-        - subnet: 172.0.1.0/24
-  bc:
-    ipam:
-      config:
-        - subnet: 172.0.2.0/24
-  cd:
-    ipam:
-      config:
-        - subnet: 172.0.3.0/24
+  ab: { ipam: { config: [ subnet: 172.1.1.0/24 ] } }
+  bc: { ipam: { config: [ subnet: 172.1.2.0/24 ] } }
+  cd: { ipam: { config: [ subnet: 172.1.3.0/24 ] } }
+  de: { ipam: { config: [ subnet: 172.1.4.0/24 ] } }
+  ef: { ipam: { config: [ subnet: 172.1.5.0/24 ] } }

@@ -1,48 +1,56 @@
 version: "3"
-name: "tcdicn-ring"
+name: "ring"
+
+# Clients are grouped based on case
+# Nodes are connected as such:
+#
+#   , b - C .
+#  A         D
+#  |         |
+#  h         e
+#   ` G - f '
+#
 
 services:
-
-  a:
-    extends:
-      file: basic.yml
-      service: sensor
-    networks: [ da, ab ]
-    environment: [ TCDICN_ID=my_cool_sensor ]
-
+  A:
+    extends: { file: common.yml, service: controller }
+    networks: [ ha, ab ]
+    environment: [ TCDICN_ID=my_sensor ]
   b:
-    extends:
-      file: basic.yml
-      service: node
+    extends: { file: common.yml, service: inspector }
     networks: [ ab, bc ]
-
-  c:
-    extends:
-      file: basic.yml
-      service: actuator
+    environment: [ TCDICN_ID=my_sensor ]
+  C:
+    extends: { file: common.yml, service: drone }
     networks: [ bc, cd ]
-    environment: [ TCDICN_ID=my_cool_actuator ]
-
-  d:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ cd, da ]
+    environment: [ TCDICN_ID=my_sensor ]
+  D:
+    extends: { file: common.yml, service: inspector }
+    networks: [ cd, de ]
+    environment: [ TCDICN_ID=my_sensor ]
+  e:
+    extends: { file: common.yml, service: drone }
+    networks: [ de, ef ]
+    environment: [ TCDICN_ID=my_sensor ]
+  f:
+    extends: { file: common.yml, service: controller }
+    networks: [ ef, fg ]
+    environment: [ TCDICN_ID=my_sensor ]
+  G:
+    extends: { file: common.yml, service: drone }
+    networks: [ fg, gh ]
+    environment: [ TCDICN_ID=my_sensor ]
+  h:
+    extends: { file: common.yml, service: drone }
+    networks: [ gh, ha ]
+    environment: [ TCDICN_ID=my_sensor ]
 
 networks:
-  ab:
-    ipam:
-      config:
-        - subnet: 172.2.1.0/24
-  bc:
-    ipam:
-      config:
-        - subnet: 172.2.2.0/24
-  cd:
-    ipam:
-      config:
-        - subnet: 172.2.3.0/24
-  da:
-    ipam:
-      config:
-        - subnet: 172.2.4.0/24
+  ab: { ipam: { config: [ subnet: 172.4.1.0/24 ] } }
+  bc: { ipam: { config: [ subnet: 172.4.2.0/24 ] } }
+  cd: { ipam: { config: [ subnet: 172.4.3.0/24 ] } }
+  de: { ipam: { config: [ subnet: 172.4.4.0/24 ] } }
+  ef: { ipam: { config: [ subnet: 172.4.5.0/24 ] } }
+  fg: { ipam: { config: [ subnet: 172.4.6.0/24 ] } }
+  gh: { ipam: { config: [ subnet: 172.4.7.0/24 ] } }
+  ha: { ipam: { config: [ subnet: 172.4.8.0/24 ] } }

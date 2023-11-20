@@ -1,68 +1,59 @@
 version: "3"
-name: "tcdicn-paths"
+name: "paths"
+
+# All clients are in the same group
+# Nodes are connected as such:
+#
+#    b - c - d
+#   /  \   /  \
+#  a --- e --- h
+#   \         /
+#    f ----- g
+#
 
 services:
-
-  sensor:
-    extends:
-      file: basic.yml
-      service: sensor
-    networks: [ Sa1, Sb1 ]
-    environment: [ TCDICN_ID=my_cool_sensor ]
-
-  a1:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ Sa1, a1a2 ]
-
-  a2:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ a1a2, a2a3 ]
-
-  a3:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ a2a3, a3A ]
-
-  b1:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ Sb1, b1A ]
-
-  actuator:
-    extends:
-      file: basic.yml
-      service: actuator
-    networks: [ a3A, b1A ]
-    environment: [ TCDICN_ID=my_cool_actuator ]
+  a:
+    extends: { file: common.yml, service: drone }
+    networks: [ ab, ae, af ]
+    environment: [ TCDICN_ID=my_sensor ]
+  b:
+    extends: { file: common.yml, service: node }
+    networks: [ ab, bc, be ]
+    environment: [ TCDICN_ID=my_sensor ]
+  c:
+    extends: { file: common.yml, service: node }
+    networks: [ bc, cd ]
+    environment: [ TCDICN_ID=my_sensor ]
+  d:
+    extends: { file: common.yml, service: node }
+    networks: [ cd, de, dh ]
+    environment: [ TCDICN_ID=my_sensor ]
+  e:
+    extends: { file: common.yml, service: node }
+    networks: [ ae, be, de, eh ]
+    environment: [ TCDICN_ID=my_sensor ]
+  f:
+    extends: { file: common.yml, service: node }
+    networks: [ af, fg ]
+    environment: [ TCDICN_ID=my_sensor ]
+  g:
+    extends: { file: common.yml, service: node }
+    networks: [ fg, gh ]
+    environment: [ TCDICN_ID=my_sensor ]
+  h:
+    extends: { file: common.yml, service: controller }
+    networks: [ dh, eh, gh ]
+    environment: [ TCDICN_ID=my_sensor ]
 
 networks:
-  Sa1:
-    ipam:
-      config:
-        - subnet: 172.3.1.0/24
-  a1a2:
-    ipam:
-      config:
-        - subnet: 172.3.2.0/24
-  a2a3:
-    ipam:
-      config:
-        - subnet: 172.3.3.0/24
-  a3A:
-    ipam:
-      config:
-        - subnet: 172.3.4.0/24
-  Sb1:
-    ipam:
-      config:
-        - subnet: 172.3.5.0/24
-  b1A:
-    ipam:
-      config:
-        - subnet: 172.3.6.0/24
+  ab: { ipam: { config: [ subnet: 172.3.1.0/24 ] } }
+  ae: { ipam: { config: [ subnet: 172.3.2.0/24 ] } }
+  af: { ipam: { config: [ subnet: 172.3.3.0/24 ] } }
+  bc: { ipam: { config: [ subnet: 172.3.4.0/24 ] } }
+  be: { ipam: { config: [ subnet: 172.3.5.0/24 ] } }
+  cd: { ipam: { config: [ subnet: 172.3.6.0/24 ] } }
+  de: { ipam: { config: [ subnet: 172.3.7.0/24 ] } }
+  dh: { ipam: { config: [ subnet: 172.3.8.0/24 ] } }
+  eh: { ipam: { config: [ subnet: 172.3.9.0/24 ] } }
+  fg: { ipam: { config: [ subnet: 172.3.10.0/24 ] } }
+  gh: { ipam: { config: [ subnet: 172.3.11.0/24 ] } }

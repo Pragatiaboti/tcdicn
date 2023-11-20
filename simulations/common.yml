@@ -1,0 +1,85 @@
+version: "3"
+name: "common"
+
+# Provides service definitions common to other simulations
+
+services:
+
+  # Subscribes to health reports, alerts and notifications
+  # Publishes individual drone and fleet commands
+  controller:
+    build:
+      context: ..
+      dockerfile_inline: |
+        FROM python
+        RUN pip install cryptography
+        COPY tcdicn.py applications/controller.py .
+        CMD python3 -c "import random, time; time.sleep(random.uniform(0, 10))"; exec python3 controller.py
+    environment:
+      TCDICN_PORT: $TCDICN_PORT
+      TCDICN_DPORT: $TCDICN_DPORT
+      TCDICN_GROUP: $TCDICN_GROUP
+      TCDICN_TTL: $TCDICN_TTL
+      TCDICN_TPF: $TCDICN_TPF
+      TCDICN_GET_TTL: $TCDICN_GET_TTL
+      TCDICN_GET_TPF: $TCDICN_GET_TPF
+      TCDICN_GET_TTP: $TCDICN_GET_TTP
+      TCDICN_VERBOSITY: $TCDICN_VERBOSITY
+
+  # Subscribes to individual drone and fleet commands
+  # Publishes metrics about this drone
+  drone:
+    build:
+      context: ..
+      dockerfile_inline: |
+        FROM python
+        RUN pip install cryptography
+        COPY tcdicn.py applications/drone.py .
+        CMD python3 -c "import random, time; time.sleep(random.uniform(0, 10))"; exec python3 drone.py
+    environment:
+      TCDICN_PORT: $TCDICN_PORT
+      TCDICN_DPORT: $TCDICN_DPORT
+      TCDICN_GROUP: $TCDICN_GROUP
+      TCDICN_TTL: $TCDICN_TTL
+      TCDICN_TPF: $TCDICN_TPF
+      TCDICN_GET_TTL: $TCDICN_GET_TTL
+      TCDICN_GET_TPF: $TCDICN_GET_TPF
+      TCDICN_GET_TTP: $TCDICN_GET_TTP
+      TCDICN_VERBOSITY: $TCDICN_VERBOSITY
+
+  # Subscribes to metrics from a (non-strict) subset of drone
+  # Publishes health reports, alerts and notifications
+  inspector:
+    build:
+      context: ..
+      dockerfile_inline: |
+        FROM python
+        RUN pip install cryptography
+        COPY tcdicn.py applications/inspector.py .
+        CMD python3 -c "import random, time; time.sleep(random.uniform(0, 10))"; exec python3 inspector.py
+    environment:
+      TCDICN_PORT: $TCDICN_PORT
+      TCDICN_DPORT: $TCDICN_DPORT
+      TCDICN_GROUP: $TCDICN_GROUP
+      TCDICN_TTL: $TCDICN_TTL
+      TCDICN_TPF: $TCDICN_TPF
+      TCDICN_GET_TTL: $ITCDICN_GET_TTL
+      TCDICN_GET_TPF: $TCDICN_GET_TPF
+      TCDICN_GET_TTP: $TCDICN_GET_TTP
+      TCDICN_VERBOSITY: $TCDICN_VERBOSITY
+
+  # Does not contributed to the ICN network but provides connectivity between clients
+  node:
+    build:
+      context: ..
+      dockerfile_inline: |
+        FROM python
+        RUN pip install cryptography
+        COPY tcdicn.py applications/node.py .
+        CMD python3 -c "import random, time; time.sleep(random.uniform(0, 10))"; exec python3 node.py
+    environment:
+      TCDICN_PORT: $TCDICN_PORT
+      TCDICN_DPORT: $TCDICN_DPORT
+      TCDICN_TTL: $TCDICN_TTL
+      TCDICN_TPF: $TCDICN_TPF
+      TCDICN_VERBOSITY: $TCDICN_VERBOSITY

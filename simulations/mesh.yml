@@ -1,36 +1,42 @@
 version: "3"
-name: "tcdicn-mesh"
+name: "mesh"
+
+# Clients are grouped based on case
+# All nodes are on the same network
 
 services:
-
-  a:
-    extends:
-      file: basic.yml
-      service: sensor
-    networks: [ abcd ]
-    environment: [ TCDICN_ID=my_cool_sensor ]
-
+  A:
+    extends: { file: common.yml, service: controller }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
   b:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ abcd ]
-
-  c:
-    extends:
-      file: basic.yml
-      service: node
-    networks: [ abcd ]
-
+    extends: { file: common.yml, service: controller }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
+  C:
+    extends: { file: common.yml, service: inspector }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
   d:
-    extends:
-      file: basic.yml
-      service: actuator
-    networks: [ abcd ]
-    environment: [ TCDICN_ID=my_cool_actuator ]
+    extends: { file: common.yml, service: inspector }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
+  E:
+    extends: { file: common.yml, service: drone }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
+  f:
+    extends: { file: common.yml, service: drone }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
+  G:
+    extends: { file: common.yml, service: drone }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
+  h:
+    extends: { file: common.yml, service: drone }
+    networks: [ n ]
+    environment: [ TCDICN_ID=my_sensor ]
 
 networks:
-  abcd:
-    ipam:
-      config:
-        - subnet: 172.1.1.0/24
+  n: { ipam: { config: [ subnet: 172.2.1.0/24 ] } }
