@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import http
 import ipaddress
 import json
 import logging
@@ -435,9 +434,9 @@ class Node:
             self.content_store[label] = SetItem(label, None, 0, [])
             log.debug("Created new label in local content store")
         if self.content_store[label].at > self.content_store[label].last:
-            log.info("New value found in local content store")
+            log.debug("New value found in local content store")
         else:
-            log.info("Subscribing for new values...")
+            log.debug("Subscribing for new values...")
 
             # Many get() calls can be waiting on one pending interests
             if self.content_store[label].fulfil is None \
@@ -508,7 +507,7 @@ class Node:
     async def join(
             self, group: str, client: str, key: bytes,
             labels: List[str]) -> None:
-        log = ContextLogger(self.log, f"grp {group}/{client}")
+        log = ContextLogger(self.log, f"group {group}/{client}")
 
         # Let the network know that we now publish to "group/client"
         if group not in self.groups:
@@ -554,7 +553,7 @@ class Node:
 
                 # If neither us nor they have a group key, create a new one
                 if inner["at"] == 0 and self.groups[group].at == 0:
-                    log.info("Generated new group key")
+                    log.debug("Generated new group key")
                     self.groups[group].raw = Fernet.generate_key()
                     self.groups[group].at = time.time()
                     break
@@ -572,7 +571,7 @@ class Node:
                 invite = base64.b64decode(invites[self.advert.client])
 
                 # Decrypt and accept the group key
-                log.info("Received new group key")
+                log.debug("Received new group key")
                 self.groups[group].raw = decrypt(self.key, invite)
                 self.groups[group].at = inner["at"]
                 break
@@ -690,8 +689,6 @@ class Node:
                 for deadline, client, routes, item in accepted:
                     self.send_queue.put_nowait(
                         (deadline + ext, client, routes[1:], item))
-        else:
-            log.warning("There was nothing to send")
 
         # Schedule next batch
         self.schedule_batch_send()
@@ -783,7 +780,7 @@ class Node:
         addrs = socket.getaddrinfo(
             host, self.dport, family=socket.AF_INET, proto=socket.IPPROTO_UDP)
         for (_, _, _, _, (host, port)) in addrs:
-            net = ipaddress.IPv4Network(host + "/24", False)  # NOTE: hardcoded
+            net = ipaddress.IPv4Network(host + "/16", False)  # NOTE: hardcoded
             self.udp.sendto(msg_bytes, (str(net.broadcast_address), port))
         self.log.debug(
             "Broadcasted items: %s (%s bytes)",
@@ -829,7 +826,8 @@ class Node:
         self.on_message(log, addr, data)
 
     # Debug web server TCP connection entry point
-    async def on_debug_connection(self, reader: StreamReader, writer: StreamWriter):
+    async def on_debug_connection(
+            self, reader: StreamReader, writer: StreamWriter):
         addr = writer.get_extra_info("peername")[0:2]
         log = ContextLogger(self.log, f"TCP {addr[0]}:{addr[1]}")
         log.info("New debug connection")
@@ -904,11 +902,11 @@ class Node:
             self.peers[addr].timer.cancel()
             log.debug("Refreshed peer")
         except KeyError:
-            log.info("New peer")
+            log.debug("New peer")
 
         # Insert new peer entry with timeout
         def on_timeout():
-            log.info("Timed out peer")
+            log.debug("Timed out peer")
             del self.peers[addr]
             for client, entries in self.routes.items():
                 for idx, route in enumerate(self.routes[client]):
@@ -922,7 +920,7 @@ class Node:
     def on_advert(self, log: Logger, addr: Addr, advert: AdvertItem):
         log = ContextLogger(log, f"{advert.client}")
         if addr not in self.peers:
-            log.warning("Received advert from unknown peer")
+            log.debug("Received advert from unknown peer")
             self.on_peer(log, addr, PeerItem(advert.eol))
         if self.advert is not None and self.advert.client == advert.client:
             log.debug("Ignored advert for ourselves")
@@ -951,11 +949,11 @@ class Node:
             log.debug("Refreshed client")
         except KeyError:
             previous_labels = []
-            log.info("New client")
+            log.debug("New client")
 
         # Insert new entry with timeout
         def on_timeout():
-            log.info("Timed out client")
+            log.debug("Timed out client")
             del self.clients[advert.client]
             del self.routes[advert.client]
 
@@ -987,7 +985,7 @@ class Node:
 
         # Check for previous interest entry
         if g.label not in self.interests:
-            log.info("New interest in label")
+            log.debug("New interest in label")
             self.interests[g.label] = {}
         try:
             if g.eol <= self.interests[g.label][g.client].eol:
@@ -996,14 +994,14 @@ class Node:
             self.interests[g.label][g.client].timer.cancel()
             log.debug("Refreshed interest")
         except KeyError:
-            log.info("New interest from client")
+            log.debug("New interest from client")
 
         # Insert new entry with timeout
         def on_timeout():
-            log.info("Timed out interest")
+            log.debug("Timed out interest")
             del self.interests[g.label][g.client]
             if len(self.interests[g.label]) == 0:
-                log.info("No more interest for label")
+                log.debug("No more interest for label")
                 del self.interests[g.label]
 
         self.interests[g.label][g.client] = g
@@ -1056,7 +1054,7 @@ class Node:
         # Insert new entry
         self.content_store[s.label] = s
         self.content_store[s.label].last = last
-        log.info("Updated local content store")
+        log.debug("Updated local content store")
 
         # Fulfil any local interests (applications waiting in .get())
         if fulfil is not None:
