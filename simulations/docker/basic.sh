@@ -18,10 +18,13 @@ echo "C is a controller in group 1 with the public keys of A and B"
 echo
 
 # Create networks and containers
-docker network create --attachable cs7ns1-18-basic-ABC
-docker create --name cs7ns1-18-basic-A --network cs7ns1-18-basic-ABC -e "TCDICN_ID=A" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/B.public.pem,/C.public.pem" -e "SCRIPT=drone.py" cs7ns1-18
-docker create --name cs7ns1-18-basic-B --network cs7ns1-18-basic-ABC -e "TCDICN_ID=B" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/C.public.pem" -e "SCRIPT=inspector.py" cs7ns1-18
-docker create --name cs7ns1-18-basic-C --network cs7ns1-18-basic-ABC -e "TCDICN_ID=C" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/B.public.pem" -e "SCRIPT=controller.py" cs7ns1-18
+docker network create cs7ns1-18-basic-ABC
+docker create --name cs7ns1-18-basic-A -e "TCDICN_VERBOSITY=dbug" -e "TCDICN_ID=A" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/B.public.pem,/C.public.pem" -e "SCRIPT=drone.py" cs7ns1-18
+docker create --name cs7ns1-18-basic-B -e "TCDICN_VERBOSITY=dbug" -e "TCDICN_ID=B" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/C.public.pem" -e "SCRIPT=inspector.py" cs7ns1-18
+docker create --name cs7ns1-18-basic-C -e "TCDICN_VERBOSITY=dbug" -e "TCDICN_ID=C" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/B.public.pem" -e "SCRIPT=controller.py" cs7ns1-18
+docker network connect cs7ns1-18-basic-ABC cs7ns1-18-basic-A
+docker network connect cs7ns1-18-basic-ABC cs7ns1-18-basic-B
+docker network connect cs7ns1-18-basic-ABC cs7ns1-18-basic-C
 
 # Generate keypairs and distribute public keys
 openssl genrsa -out "$tmp/A.pem" 2048 && openssl rsa -in "$tmp/A.pem" -pubout -out "$tmp/A.public.pem" && docker cp "$tmp/A.pem" cs7ns1-18-basic-A:/key.pem || exit 1

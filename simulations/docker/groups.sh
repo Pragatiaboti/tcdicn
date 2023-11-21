@@ -39,6 +39,20 @@ docker create --name cs7ns1-18-groups-E -e "TCDICN_ID=E" -e "TCDICN_KEYFILE=/key
 docker create --name cs7ns1-18-groups-F -e "TCDICN_ID=F" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/C.public.pem,/E.public.pem 2:/C.public.pem" -e "SCRIPT=controller.py" cs7ns1-18
 docker create --name cs7ns1-18-groups-X -e "SCRIPT=node.py" cs7ns1-18
 docker create --name cs7ns1-18-groups-Y -e "SCRIPT=node.py" cs7ns1-18
+docker network connect cs7ns1-18-groups-AX cs7ns1-18-groups-A
+docker network connect cs7ns1-18-groups-AX cs7ns1-18-groups-X
+docker network connect cs7ns1-18-groups-BX cs7ns1-18-groups-B
+docker network connect cs7ns1-18-groups-BX cs7ns1-18-groups-X
+docker network connect cs7ns1-18-groups-CX cs7ns1-18-groups-C
+docker network connect cs7ns1-18-groups-CX cs7ns1-18-groups-X
+docker network connect cs7ns1-18-groups-DY cs7ns1-18-groups-D
+docker network connect cs7ns1-18-groups-DY cs7ns1-18-groups-Y
+docker network connect cs7ns1-18-groups-EY cs7ns1-18-groups-E
+docker network connect cs7ns1-18-groups-EY cs7ns1-18-groups-Y
+docker network connect cs7ns1-18-groups-FY cs7ns1-18-groups-F
+docker network connect cs7ns1-18-groups-FY cs7ns1-18-groups-Y
+docker network connect cs7ns1-18-groups-XY cs7ns1-18-groups-X
+docker network connect cs7ns1-18-groups-XY cs7ns1-18-groups-Y
 
 # Generate keypairs and distribute public keys
 openssl genrsa -out "$tmp/A.pem" 2048 && openssl rsa -in "$tmp/A.pem" -pubout -out "$tmp/A.public.pem" && docker cp "$tmp/A.pem" cs7ns1-18-groups-A:/key.pem || exit 1
