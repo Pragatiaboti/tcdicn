@@ -1,60 +1,122 @@
 import asyncio
+import logging
 import os
-from dataclasses import dataclass
-from typing import Optional
-
-import tcdicn
-
-LABELS = []
+import sys
+from tcdicn import Node
 
 
-@dataclass
-class Client:
-    name: str
-    port: int
-    trust_clients: list[str]
-    private_key: Optional[str] = None
-    public_kay: Optional[str] = None
+class Controller:
 
+    def __init__(self):
+        self.node = Node()
 
-dport = int(os.getenv("TCDICN_DPORT") or 33333)  # Talk to :33333
-ttl = int(os.getenv("TCDICN_TTL") or 30)  # Forget me after 30s
-tpf = int(os.getenv("TCDICN_TPF") or 3)  # Remind peers every 30/3s
-ttp = float(os.getenv("TCDICN_TTP") or 5)  # Repeat my adverts before 5s
+    async def start(
+            self, name: str, port: int, dport: int, wport: int,
+            ttl: float, tpf: int, ttp: float,
+            get_ttl: float, get_tpf: int, get_ttp: float,
+            keyfile: str, groups: str):
+
+        # The labels this controller can publish to
+        # TODO: {drone}-command for each drone
+        labels = ["fleet-command", "drone6-command..."]
+
+        # ICN client node called name publishes these labels and needs
+        # any data propagated back in under ttp seconds at each node
+        client = {}
+        client["name"] = name
+        client["ttp"] = ttp
+        client["labels"] = [] if groups else labels
+        if keyfile is not None:
+            with open(keyfile, "rb") as f:
+                client["key"] = f.read()
+
+        # Start ICN node as a client
+        logging.info("Starting ICN node...")
+        node_task = asyncio.create_task(
+            self.node.start(port, dport, ttl, tpf, client))
+        if wport != 0:
+            asyncio.create_task(self.node.serve_debug(wport))
+
+        # Join every group by joining with each of the associated clients
+        # GROUP1:CLIENT1_KEY,CLIENT2_KEY GROUP2:CLIENT3_KEY,CLIENT4_KEY
+        logging.info("Joining groups...")
+        group_tasks = {}
+        for group in groups.split(" ") if groups else []:
+            [group, public_key_files] = group.split(":")
+            group_tasks[group] = []
+            for public_key_file in public_key_files.split(","):
+                [client, ext] = os.path.basename(public_key_file).split(".", 1)
+                assert ext == "public.pem"
+                with open(public_key_file, "rb") as f:
+                    public_key = f.read()
+                joiner = self.node.join(group, client, public_key, labels)
+                task = asyncio.create_task(joiner)
+                group_tasks[group].append(task)
+
+        # Wait until at least one client in every group has been joined with
+        logging.info("Waiting for all groups be joined...")
+        for tasks in group_tasks.values():
+            done, tasks = await asyncio.wait(
+                tasks + [node_task], return_when=asyncio.FIRST_COMPLETED)
+            if node_task in done:
+                return
+
+        # Start controller
+        logging.info("Starting controller...")
+        commanding_task = asyncio.create_task(self.start_commanding())
+        listening_task = asyncio.create_task(
+            self.start_listening(get_ttl, get_tpf, get_ttp))
+
+        # Run until shutdown
+        tasks = [node_task, commanding_task, listening_task]
+        _, end = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in end:
+            task.cancel()
+        await asyncio.wait(end)
+
+    async def start_commanding(self):
+        while True:
+            # TODO: publish commands from user input
+            await asyncio.sleep(float("inf"))
+
+    async def start_listening(self, ttl, tpf, ttp):
+        while True:
+            # TODO: print reports from inspectors
+            await asyncio.sleep(float("inf"))
 
 
 async def main():
-    clients: list[Client] = [
-        Client("controller0", 33001, ['controller1', 'controller2']),
-        Client("controller1", 33002, ['controller2']),
-        Client("controller2", 33003, ['controller0']),
-    ]
-    public_keys = []
-    for i in range(len(clients)):
-        with open(f'keys/{clients[i].name}.pem', 'rb') as f:
-            clients[i].private_key = f.read()
-        with open(f'keys/{clients[i].name}', 'rb') as f:
-            clients[i].public_kay = f.read()
-            public_keys.append(f.read())
+    name = os.getenv("TCDICN_ID")  # A unique name to call me on the network
+    port = int(os.getenv("TCDICN_PORT") or 33333)  # Listen on :33333
+    dport = int(os.getenv("TCDICN_DPORT") or port)  # Talk to :33333
+    wport = int(os.getenv("TCDICN_WPORT") or 0)  # Optional debug web server
+    ttl = float(os.getenv("TCDICN_TTL") or 30)  # Forget me after 30s
+    tpf = int(os.getenv("TCDICN_TPF") or 3)  # Remind peers every 30/3s
+    ttp = float(os.getenv("TCDICN_TTP") or 5)  # Repeat my adverts before 5s
+    get_ttl = float(os.getenv("TCDICN_GET_TTL") or 90)  # Forget my interest
+    get_tpf = int(os.getenv("TCDICN_GET_TPF") or 2)  # Remind about my interest
+    get_ttp = float(os.getenv("TCDICN_GET_TTP") or 0.5)  # Deadline to respond
+    keyfile = os.getenv("TCDICN_KEYFILE") or None  # Private keyfile path
+    groups = os.getenv("TCDICN_GROUPS") or ""  # Which groups to join
+    verb = os.getenv("TCDICN_VERBOSITY") or "info"  # Logging verbosity
+    if name is None:
+        sys.exit("Please give client a unique ID by setting TCDICN_ID")
 
-    other_nodes: list[tcdicn.Node] = []
-    tasks = []
-    for client in clients:
-        node = tcdicn.Node()
-        other_nodes.append(node)
-        tasks.append(asyncio.create_task(node.start(client.port, dport, ttl, tpf, {
-            "name": client.name, "ttp": ttp, "labels": LABELS
-        })))
-    await asyncio.wait(tasks)
+    # Logging verbosity
+    verbs = {"dbug": logging.DEBUG, "info": logging.INFO, "warn": logging.WARN}
+    logging.basicConfig(
+        format="%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s",
+        level=verbs[verb], datefmt="%H:%M:%S")
 
-    tasks = []
-    for client, node in zip(clients, other_nodes):
-        for client_name in client.trust_clients:
-            tasks.append(asyncio.create_task(node.join(
-                'my_cool_group', client_name, public_keys[client_name[-1]], LABELS
-            )))
-
-    await asyncio.wait(tasks)
+    # Run controller until shutdown
+    logging.info("Starting controller...")
+    controller = Controller()
+    await controller.start(
+        name, port, dport, wport,
+        ttl, tpf, ttp,
+        get_ttl, get_tpf, get_ttp,
+        keyfile, groups)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

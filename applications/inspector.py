@@ -1,93 +1,101 @@
-import os
 import asyncio
-from tcdicn import Node
 import logging
-import time
+import os
+import sys
+from tcdicn import Node
 
-UNRESPONSIVE_THRESHOLD = 60  # (in seconds)
-UNRESPONSIVE_CHECK_INTERVAL = 10  # (in seconds)
 
-class DroneMonitorClient:
+class Inspector:
 
-    def __init__(self, drones, node, ttl, tpf, ttp, group):
-        self.drones = drones
-        self.node = node
-        self.ttl = ttl
-        self.tpf = tpf
-        self.ttp = ttp
-        self.group = group
-        self.last_msg_times = {}
-        for drone in drones:
-            self.last_msg_times[drone] = time.time()
+    def __init__(self):
+        self.node = Node()
 
-    async def detect_unresponsive(self, drone):
+    async def start(
+            self, name: str, port: int, dport: int, wport: int,
+            ttl: float, tpf: int, ttp: float,
+            get_ttl: float, get_tpf: int, get_ttp: float,
+            keyfile: str, groups: str):
+
+        # The labels this inspector can publish to
+        # TODO: {drone}-status for each drone
+        labels = ["drone6-status..."]
+
+        # ICN client node called name publishes these labels and needs
+        # any data propagated back in under ttp seconds at each node
+        client = {}
+        client["name"] = name
+        client["ttp"] = ttp
+        client["labels"] = [] if groups else labels
+        if keyfile is not None:
+            with open(keyfile, "rb") as f:
+                client["key"] = f.read()
+
+        # Start ICN node as a client
+        logging.info("Starting ICN node...")
+        node_task = asyncio.create_task(
+            self.node.start(port, dport, ttl, tpf, client))
+        if wport != 0:
+            asyncio.create_task(self.node.serve_debug(wport))
+
+        # Join every group by joining with each of the associated clients
+        # GROUP1:CLIENT1_KEY,CLIENT2_KEY GROUP2:CLIENT3_KEY,CLIENT4_KEY
+        logging.info("Joining groups...")
+        group_tasks = {}
+        for group in groups.split(" ") if groups else []:
+            [group, public_key_files] = group.split(":")
+            group_tasks[group] = []
+            for public_key_file in public_key_files.split(","):
+                [client, ext] = os.path.basename(public_key_file).split(".", 1)
+                assert ext == "public.pem"
+                with open(public_key_file, "rb") as f:
+                    public_key = f.read()
+                joiner = self.node.join(group, client, public_key, labels)
+                task = asyncio.create_task(joiner)
+                group_tasks[group].append(task)
+
+        # Wait until at least one client in every group has been joined with
+        logging.info("Waiting for all groups be joined...")
+        for tasks in group_tasks.values():
+            done, tasks = await asyncio.wait(
+                tasks + [node_task], return_when=asyncio.FIRST_COMPLETED)
+            if node_task in done:
+                return
+
+        # Start inspector
+        logging.info("Starting inspector...")
+        monitoring_task = asyncio.create_task(
+            self.start_monitoring(get_ttl, get_tpf, get_ttp))
+
+        # Run until shutdown
+        tasks = [node_task, monitoring_task]
+        _, end = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in end:
+            task.cancel()
+        await asyncio.wait(end)
+
+    async def start_monitoring(self, ttl, tpf, ttp):
         while True:
-            # Check if a drone has not sent a message within the specified time
-            if time.time() - self.last_msg_times[drone] > UNRESPONSIVE_THRESHOLD:
-                # Drone is unresponsive, notify controllers
-                await self.node.set(f"status-{drone}", "Unresponsive")
-            await asyncio.sleep(UNRESPONSIVE_CHECK_INTERVAL)
-
-    async def monitor_drone(self, drone):
-        history_buffer = []  # Buffer to store the last 100 readings
-        while True:
-            # Subscribe to different types of sensor data for each drone separately
-            position = await self.node.get(f"{drone}-position", self.ttl, self.tpf, self.ttp, self.group)
-            temperature = await self.node.get(f"{drone}-temperature", self.ttl, self.tpf, self.ttp, self.group)
-            battery = await self.node.get(f"{drone}-battery", self.ttl, self.tpf, self.ttp, self.group)
-
-            self.last_msg_times[drone] = time.time()
-
-            features = {
-                "temperature": float(temperature),
-                "battery": float(battery),
-                "position": position,
-            }
-            history_buffer.append(features)
-             # Trim the history buffer to keep only the last 100 readings
-            history_buffer = history_buffer[-100:]
+            # TODO: subscribe to drone sensor readings from every drone
+            # TODO: publish reports
+            await asyncio.sleep(float("inf"))
 
 
-            # Run ML model on the last 5 minutes of collected data
-            recent_data = history_buffer[-300:]  # 300 seconds = 5 minutes
-            if len(recent_data) > 0:
-                features_matrix = [list(features.values()) for features in recent_data]
-                failure_predictions = self.model.predict(features_matrix)
-
-                # Publish alerts based on predictions
-                for idx, failure_prediction in enumerate(failure_predictions):
-                    if failure_prediction == 1:
-                        await self.node.set(f"status-{self.drone_id}", "Failure-alert")
-
-            # Wait a bit before the next monitoring cycle
-            await asyncio.sleep(10)
-
-    async def monitor_drones(self):
-        tasks = []
-        for drone in self.drones:
-            tasks.append(asyncio.create_task(self.monitor_drone(drone)))
-        await asyncio.gather(*tasks)
-
-    async def on_data(self, data, meta):
-        # Update the last received message time when data is received
-        await super().on_data(data, meta)
-
-# Main Function
 async def main():
     name = os.getenv("TCDICN_ID")  # A unique name to call me on the network
     port = int(os.getenv("TCDICN_PORT") or 33333)  # Listen on :33333
     dport = int(os.getenv("TCDICN_DPORT") or port)  # Talk to :33333
-    wport = os.getenv("TCDICN_WPORT") or None
+    wport = int(os.getenv("TCDICN_WPORT") or 0)  # Optional debug web server
     ttl = float(os.getenv("TCDICN_TTL") or 30)  # Forget me after 30s
     tpf = int(os.getenv("TCDICN_TPF") or 3)  # Remind peers every 30/3s
     ttp = float(os.getenv("TCDICN_TTP") or 5)  # Repeat my adverts before 5s
-    keyfile = os.getenv("TCDICN_KEYFILE") or None  # Private keyfile path
-    trusteds = os.getenv("TCDICN_TRUSTEDS") or None  # Trusted client paths
-    group = os.getenv("TCDICN_GROUP") or None  # Which group to make/join
     get_ttl = float(os.getenv("TCDICN_GET_TTL") or 90)  # Forget my interest
     get_tpf = int(os.getenv("TCDICN_GET_TPF") or 2)  # Remind about my interest
     get_ttp = float(os.getenv("TCDICN_GET_TTP") or 0.5)  # Deadline to respond
+    keyfile = os.getenv("TCDICN_KEYFILE") or None  # Private keyfile path
+    groups = os.getenv("TCDICN_GROUPS") or ""  # Which groups to join
     verb = os.getenv("TCDICN_VERBOSITY") or "info"  # Logging verbosity
+    if name is None:
+        sys.exit("Please give client a unique ID by setting TCDICN_ID")
 
     # Logging verbosity
     verbs = {"dbug": logging.DEBUG, "info": logging.INFO, "warn": logging.WARN}
@@ -95,49 +103,14 @@ async def main():
         format="%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s",
         level=verbs[verb], datefmt="%H:%M:%S")
 
-    logging.info("Starting inspected...")
+    # Run inspector until shutdown
+    inspector = Inspector()
+    await inspector.start(
+        name, port, dport, wport,
+        ttl, tpf, ttp,
+        get_ttl, get_tpf, get_ttp,
+        keyfile, groups)
 
-    drones = ["drone06", "drone07", "drone08", "drone09", "drone10"]
-    labels = [f"status-{drone}" for drone in drones]
-
-    # ICN client node called name publishes these labels and needs
-    # any data propagated back in under ttp seconds at each node
-    client = {"name": name, "ttp": ttp, "labels": []}
-
-    # Load this clients private key
-    if keyfile is not None:
-        with open(keyfile, "rb") as f:
-            client["key"] = f.read()
-
-    # Start ICN node as a client
-    node = Node()
-    node_task = asyncio.create_task(node.start(port, dport, ttl, tpf, client))
-
-    # Join every trusted client in a group
-    if any([trusteds, group, keyfile]):
-        if not all([trusteds, group, keyfile]):
-            raise RuntimeError("Missing some group config")
-        tasks = [node_task]
-        for trusted in trusteds.split(","):
-            name = os.path.basename(trusted)
-            with open(trusted, "rb") as f:
-                key = f.read()
-            tasks.append(asyncio.create_task(node.join(group, name, key, labels)))
-        while len(tasks) > 1:
-            done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            if node_task in done:
-                return
-
-    # Create client
-    client = DroneMonitorClient(drones, node, get_ttl, get_tpf, get_ttp, group)
-    client_task = asyncio.create_task(client.monitor_drones())
-
-    # Serve debug information if requested
-    if wport is not None:
-        asyncio.create_task(node.serve_debug(int(wport)))
-
-    tasks = [node_task, client_task]
-    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
 if __name__ == "__main__":
     asyncio.run(main())
