@@ -2,6 +2,10 @@ import asyncio
 import logging
 import os
 import sys
+from typing import List
+
+import aioconsole
+
 from tcdicn import Node
 
 
@@ -9,6 +13,9 @@ class Controller:
 
     def __init__(self):
         self.node = Node()
+
+        self.labels: List[str] = []
+        self.set_tasks: List[asyncio.Task] = []
 
     async def start(
             self, name: str, port: int, dport: int, wport: int,
@@ -18,14 +25,13 @@ class Controller:
 
         # The labels this controller can publish to
         # TODO: {drone}-command for each drone
-        labels = ["fleet-command", "drone6-command..."]
+        labels = ["fleet-command"]
+        for i in range(10):
+            labels.append(f"drone{i}-command")
 
         # ICN client node called name publishes these labels and needs
         # any data propagated back in under ttp seconds at each node
-        client = {}
-        client["name"] = name
-        client["ttp"] = ttp
-        client["labels"] = [] if groups else labels
+        client = {"name": name, "ttp": ttp, "labels": [] if groups else labels}
         if keyfile is not None:
             with open(keyfile, "rb") as f:
                 client["key"] = f.read()
@@ -42,7 +48,7 @@ class Controller:
         logging.info("Joining groups...")
         group_tasks = {}
         for group in groups.split(" ") if groups else []:
-            [group, public_key_files] = group.split(":")
+            group, public_key_files = group.split(":")
             group_tasks[group] = []
             for public_key_file in public_key_files.split(","):
                 [client, ext] = os.path.basename(public_key_file).split(".", 1)
@@ -77,13 +83,41 @@ class Controller:
 
     async def start_commanding(self):
         while True:
-            # TODO: publish commands from user input
-            await asyncio.sleep(float("inf"))
+            command = (await aioconsole.ainput()).strip()
+            args = command.split()
+
+            if args[0] in ('g', 'get'):
+                if len(args) != 2:
+                    print('invalid command')
+                    return
+                self.labels.append(args[1])
+            elif args[0] in ('s', 'set'):
+                if len(args) != 3:
+                    print('invalid command')
+                    return
+                task = asyncio.create_task(self.node.set(args[1], args[2]))
+                self.set_tasks.append(task)
+            else:
+                print('invalid command')
 
     async def start_listening(self, ttl, tpf, ttp):
+        get_tasks: List[asyncio.Task] = []
         while True:
-            # TODO: print reports from inspectors
-            await asyncio.sleep(float("inf"))
+            while len(self.labels) != 0:
+                label = self.labels.pop()
+                task = asyncio.create_task(self.node.get(label, ttl, tpf, ttp))
+                task.set_name(label)
+                get_tasks.append(task)
+
+            for task in get_tasks:
+                if task.done():
+                    print(f"Got {task.get_name()} {task.result()}")
+                    get_tasks.remove(task)
+
+            for task in self.set_tasks:
+                if task.done():
+                    print(f"Set {task.get_name()} {task.result()}")
+                    self.set_tasks.remove(task)
 
 
 async def main():
