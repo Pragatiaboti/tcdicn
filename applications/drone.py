@@ -8,6 +8,9 @@ from tcdicn import Node
 
 class Drone:
 
+    def __init__(self):
+        self.node = Node()
+
     async def start(
             self, name: str, port: int, dport: int, wport: int,
             ttl: float, tpf: int, ttp: float,
@@ -33,11 +36,10 @@ class Drone:
 
         # Start ICN node as a client
         logging.info("Starting ICN node...")
-        node = Node()
         node_task = asyncio.create_task(
-            node.start(port, dport, ttl, tpf, client))
+            self.node.start(port, dport, ttl, tpf, client))
         if wport != 0:
-            asyncio.create_task(node.serve_debug(wport))
+            asyncio.create_task(self.node.serve_debug(wport))
 
         # Join every group by joining with each of the associated clients
         # GROUP1:CLIENT1_KEY,CLIENT2_KEY GROUP2:CLIENT3_KEY,CLIENT4_KEY
@@ -51,7 +53,8 @@ class Drone:
                 assert ext == "public.pem"
                 with open(public_key_file, "rb") as f:
                     public_key = f.read()
-                joiner = node.join(group, client, public_key, labels)
+                joiner = self.node.join(
+                    group, client, public_key, labels, ttl, tpf, ttp)
                 task = asyncio.create_task(joiner)
                 group_tasks[group].append(task)
 
@@ -66,9 +69,9 @@ class Drone:
         # Start drone
         logging.info("Starting drone...")
         sensors_task = asyncio.create_task(
-            self.start_sensing(node, name))
+            self.start_sensing(name))
         obeying_task = asyncio.create_task(
-            self.start_obeying(node, get_ttl, get_tpf, get_ttp))
+            self.start_obeying(get_ttl, get_tpf, get_ttp))
 
         # Run until shutdown
         tasks = [node_task, sensors_task, obeying_task]
@@ -77,7 +80,7 @@ class Drone:
             task.cancel()
         await asyncio.wait(end)
 
-    async def start_sensing(self, node, name):
+    async def start_sensing(self, name):
         # TODO: more sensors for inspectors to subscribe to
         xposition = random.uniform(-1, 1)
         yposition = random.uniform(-1, 1)
@@ -89,14 +92,14 @@ class Drone:
             yposition += random.uniform(-0.1, 0.1)
             temperature += random.uniform(-0.5, 0.5)
 
-            await node.set(
+            await self.node.set(
                 f"{name}-xposition", str(xposition))
-            await node.set(
+            await self.node.set(
                 f"{name}-yposition", str(yposition))
-            await node.set(
+            await self.node.set(
                 f"{name}-temperature", str(temperature))
 
-    async def start_obeying(self, node, ttl, tpf, ttp):
+    async def start_obeying(self, ttl, tpf, ttp):
         while True:
             # TODO: subscribe to commands for this drone and the fleet
             await asyncio.sleep(float("inf"))

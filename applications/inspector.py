@@ -49,7 +49,8 @@ class Inspector:
                 assert ext == "public.pem"
                 with open(public_key_file, "rb") as f:
                     public_key = f.read()
-                joiner = self.node.join(group, client, public_key, labels)
+                joiner = self.node.join(
+                    group, client, public_key, labels, ttl, tpf, ttp)
                 task = asyncio.create_task(joiner)
                 group_tasks[group].append(task)
 

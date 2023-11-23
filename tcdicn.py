@@ -1,11 +1,13 @@
 import asyncio
 import base64
+import fcntl
 import ipaddress
 import json
 import logging
 import queue
 import signal
 import socket
+import struct
 import time
 from abc import ABC, abstractmethod
 from asyncio import Task, Future, DatagramTransport, StreamWriter, StreamReader
@@ -142,7 +144,8 @@ class MessageItem(ABC):
 class PeerItem(MessageItem):
     def __init__(self, eol: float):
         self.eol = eol
-        self.timer: Optional[Task] = None  # Used internal within nodes to timeout entry
+        # Used internal within nodes to timeout entry
+        self.timer: Optional[Task] = None
 
     def to_dict(self) -> dict:
         return {
@@ -171,7 +174,8 @@ class AdvertItem(MessageItem):
         self.score = score
         self.ttp = ttp
         self.eol = eol
-        self.timer: Optional[Task] = None  # Used internal within nodes to timeout entry
+        # Used internal within nodes to timeout entry
+        self.timer: Optional[Task] = None
 
     def to_dict(self) -> dict:
         return {
@@ -204,7 +208,8 @@ class GetItem(MessageItem):
         self.after = after
         self.ttp = ttp
         self.eol = eol
-        self.timer = None  # Used internal within nodes to timeout entry
+        # Used internal within nodes to timeout entry
+        self.timer = None
 
     def to_dict(self) -> dict:
         return {
@@ -423,7 +428,7 @@ class Node:
 
         # Encrypt label
         if group is not None:
-            # TODO(v0.3): stable label encryption
+            # TODO(security): stable label encryption
             label = group + "//" + label
             # label = self.groups[group].key.encrypt(label.encode())
             # label = base64.b64encode(label).decode("ASCII")
@@ -487,7 +492,7 @@ class Node:
         if group is not None:
             data = self.groups[group].key.encrypt(data.encode())
             data = base64.b64encode(data).decode("ASCII")
-            # TODO(v0.3): stable label encryption
+            # TODO(security): stable label encryption
             label = group + "//" + label
             # label = self.groups[group].key.encrypt(label.encode())
             # label = base64.b64encode(label).decode("ASCII")
@@ -506,7 +511,7 @@ class Node:
     # Group encryption and authorisation
     async def join(
             self, group: str, client: str, key: bytes,
-            labels: List[str]) -> None:
+            labels: List[str], ttl: float, tpf: int, ttp: float) -> None:
         log = ContextLogger(self.log, f"group {group}/{client}")
 
         # Let the network know that we now publish to "group/client"
@@ -538,8 +543,6 @@ class Node:
 
             # Keep trying until we get a new group key
             while True:
-                # TODO(adapt): parameterise these
-                ttl, tpf, ttp = 30, 2, 1
 
                 # Receive valid invites from group/client
                 outer = await self.get(group + "/" + client, ttl, tpf, ttp)
@@ -583,7 +586,7 @@ class Node:
                 if label not in self.groups[group].encrypted_labels]
             self.groups[group].encrypted_labels = []
             for label in self.groups[group].labels:
-                # TODO(v0.3): stable label encryption
+                # TODO(security): stable label encryption
                 label = group + "//" + label
                 # label = self.groups[group].key.encrypt(label.encode()))
                 # label = base64.b64encode(label).decode("ASCII")
@@ -776,12 +779,20 @@ class Node:
     # TODO(optimisation): use multicast instead of broadcast
     def broadcast_msg(self, msg: Message):
         msg_bytes = msg.to_bytes()
-        host = socket.gethostname()
-        addrs = socket.getaddrinfo(
-            host, self.dport, family=socket.AF_INET, proto=socket.IPPROTO_UDP)
-        for (_, _, _, _, (host, port)) in addrs:
-            net = ipaddress.IPv4Network(host + "/16", False)  # NOTE: hardcoded
-            self.udp.sendto(msg_bytes, (str(net.broadcast_address), port))
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            for _, iface in socket.if_nameindex():
+                try:
+                    data_in = struct.pack("256s", iface.encode())
+                    data_out = fcntl.ioctl(sock, 35099, data_in)
+                    mask = socket.inet_ntoa(data_out[20:24])
+                    data_out = fcntl.ioctl(sock, 0x8915, data_in)
+                    addr = socket.inet_ntoa(data_out[20:24])
+                except OSError:
+                    continue
+                ip = ipaddress.IPv4Network(addr + "/" + mask, False)
+                addr = (str(ip.broadcast_address), self.dport)
+                self.udp.sendto(msg_bytes, addr)
+                self.log.debug("Destination: %s", addr)
         self.log.debug(
             "Broadcasted items: %s (%s bytes)",
             len(msg.items), len(msg_bytes))
@@ -797,7 +808,8 @@ class Node:
         r_addrs = socket.getaddrinfo(socket.getfqdn(addr[0]), addr[1])
         for (_, _, _, _, l_addr) in l_addrs:
             for (_, _, _, _, r_addr) in r_addrs:
-                if r_addr == l_addr:
+                local = "localhost", "0.0.0.0", "127.0.0.1"
+                if r_addr == l_addr or r_addr[0] in local:
                     log.debug("Ignored broadcast from self")
                     return
 
@@ -977,8 +989,6 @@ class Node:
         self.broadcast_queue.put_nowait((deadline, advert))
         self.is_broadcast_queue_changed = True
         log.debug("New advert deadline: %s", to_human(deadline))
-
-        # TODO(safely): cooldown / remove duplicates
 
     def on_get(self, log: Logger, g: GetItem):
         log = ContextLogger(log, f"get {g.label}>{g.after}@{g.client}")
