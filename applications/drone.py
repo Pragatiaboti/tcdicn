@@ -71,7 +71,7 @@ class Drone:
         sensors_task = asyncio.create_task(
             self.start_sensing(name))
         obeying_task = asyncio.create_task(
-            self.start_obeying(get_ttl, get_tpf, get_ttp))
+            self.start_obeying(name, ttl, tpf, ttp))
 
         # Run until shutdown
         tasks = [node_task, sensors_task, obeying_task]
@@ -81,11 +81,19 @@ class Drone:
         await asyncio.wait(end)
 
     async def start_sensing(self, name):
-       xposition = random.uniform(-1, 1)
+        xposition = random.uniform(-1, 1)
         yposition = random.uniform(-1, 1)
         temperature = random.uniform(15, 25)
         cpu_usage = random.uniform(0, 100)
         battery_level = random.uniform(0, 100)
+        # Simulate additional sensor data
+        lat = random.uniform(-90, 90)
+        lon = random.uniform(-180, 180)
+        alt = random.uniform(0, 10000)  # Altitude in meters
+        pitch = random.uniform(-90, 90)  # Pitch angle
+        roll = random.uniform(-90, 90)   # Roll angle
+        yaw = random.uniform(-180, 180)  # Yaw angle
+        activity = random.choice(["idle", "moving", "working"])  # Activity status
 
         while True:
             await asyncio.sleep(random.uniform(4, 6))
@@ -96,18 +104,16 @@ class Drone:
             temperature += random.uniform(-0.5, 0.5)
             cpu_usage += random.uniform(-10, 10)
             battery_level -= random.uniform(0, 10)  # Assuming battery level decreases
-
             # Ensure battery level stays within bounds
             battery_level = max(0, min(battery_level, 100))
 
-            # Simulate additional sensor data
-            lat = random.uniform(-90, 90)
-            lon = random.uniform(-180, 180)
-            alt = random.uniform(0, 10000)  # Altitude in meters
-            pitch = random.uniform(-90, 90)  # Pitch angle
-            roll = random.uniform(-90, 90)   # Roll angle
-            yaw = random.uniform(-180, 180)  # Yaw angle
-            activity = random.choice(["idle", "moving", "working"])  # Activity status
+            lat += random.uniform(-10, 10)
+            lon += random.uniform(-10, 10)
+            alt -= random.uniform(0, 10)
+            pitch += random.uniform(-0.5, 0.5)
+            roll += random.uniform(-10, 10)
+            yaw += random.uniform(-10, 10)
+            activity = random.choice(["idle", "moving", "working"])  
 
             # Publish all sensor data
             await self.node.set(f"{name}-xposition", str(xposition))
@@ -119,14 +125,15 @@ class Drone:
             await self.node.set(f"{name}-orientation", f"({pitch}, {roll}, {yaw})")
             await self.node.set(f"{name}-activity", activity)
 
-    async def start_obeying(self, ttl, tpf, ttp):
+    async def start_obeying(self, name, ttl, tpf, ttp):
         while True:
-            # Subscribe to fleet and specific drone commands
-            fleet_command = await self.node.get("fleet-command")
-            drone_command = await self.node.get(f"{name}-command")
+            # 为 get 方法提供必需的参数
+            fleet_command = await self.node.get("fleet-command", ttl, tpf, ttp)
+            drone_command = await self.node.get(f"{name}-command", ttl, tpf, ttp)
             print(f"New fleet command: {fleet_command}")
             print(f"New command for {name}: {drone_command}")
-            
+
+            # Sleep for a short duration to simulate a waiting period for new commands            
             await asyncio.sleep(float("inf"))
 
 
