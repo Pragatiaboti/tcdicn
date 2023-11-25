@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import time
 from tcdicn import Node
 
 
@@ -18,7 +19,8 @@ class Inspector:
 
         # The labels this inspector can publish to
         # TODO: {drone}-status for each drone
-        labels = ["drone6-status..."]
+        drones = ["drone1", "drone2", "drone3"] 
+        labels = [f"{drone}-status" for drone in drones]
 
         # ICN client node called name publishes these labels and needs
         # any data propagated back in under ttp seconds at each node
@@ -78,6 +80,23 @@ class Inspector:
         while True:
             # TODO: subscribe to drone sensor readings from every drone
             # TODO: publish reports
+            drones = ["drone1", "drone2", "drone3"]  
+            last_message_time = {drone: 0 for drone in drones}
+
+            while True:
+                for drone in drones:
+                    position = await self.node.get(f"{drone}-position", ttl, tpf, ttp)
+                    battery = await self.node.get(f"{drone}-battery", ttl, tpf, ttp)
+
+                    if battery is not None and float(battery) < 20:
+                        await self.node.set(f"{drone}-status", "Battery low")
+                    
+                    current_time = time.time()
+                    if position is not None or battery is not None:
+                        last_message_time[drone] = current_time
+                    elif current_time - last_message_time[drone] > 30:
+                        await self.node.set(f"{drone}-status", "No response for over 30 seconds")
+
             await asyncio.sleep(float("inf"))
 
 
