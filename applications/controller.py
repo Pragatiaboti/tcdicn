@@ -113,7 +113,7 @@ class Controller:
                     tasks, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
                     status = task.result()
-                    logging.info("%s status: %s", drone, status)
+                    logging.info("Received %s status: %s", drone, status)
                     subscribe(task.get_name())
 
         # Subscribe to every drone's status

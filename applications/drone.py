@@ -96,60 +96,60 @@ class Drone:
         ori_pit = random.uniform(0, 25)
         ori_yaw = random.uniform(0, 25)
         ori_rol = random.uniform(0, 25)
-        temp = random.uniform(25, 90)
+        tmp = random.uniform(25, 90)
         cpu = random.uniform(0, 100)
         batt = random.uniform(90, 100)
 
         # Simulated activity
-        activities = ["charging", "moving", "hauling", "welding"]
-        previous_activity = None
+        acts = ["charging", "moving", "hauling", "welding"]
+        prev_act = None
         while True:
-            activity = random.choice(activities)
+            act = random.choice(acts)
 
-            if activity != previous_activity:
-                logging.info(f"New activity: {activity}")
+            if act != prev_act:
+                logging.info(f"New activity: {act}")
                 for group in groups:
                     await self.node.set(f"{name}-activity", "charging", group)
-                previous_activity = activity
+                prev_act = act
             else:
-                logging.debug(f"Activity: {activity}")
+                logging.debug(f"Activity: {act}")
 
             await asyncio.sleep(random.uniform(10, 30))
 
-            if activity == "charging":
-                temp += random.uniform(-1.5, 0.5)
+            if act == "charging":
+                tmp += random.uniform(-1.5, 0.5)
                 cpu += random.uniform(-25, 25)
                 batt += random.uniform(3, 3.5)
 
-            if activity == "moving":
+            if act == "moving":
                 pos_lat += random.uniform(-0.002, 0.002)
                 pos_lon += random.uniform(-0.002, 0.002)
                 pos_alt += random.uniform(-20, 20)
                 ori_pit = random.gauss(0, 15)
                 ori_yaw = random.gauss(0, 15)
                 ori_rol = random.gauss(0, 15)
-                temp += random.uniform(-1.5, 0.5)
+                tmp += random.uniform(-1.5, 0.5)
                 cpu += random.uniform(-25, 25)
                 batt -= random.uniform(0.5, 1)
 
-            if activity == "hauling":
+            if act == "hauling":
                 pos_lat += random.uniform(-0.001, 0.001)
                 pos_lon += random.uniform(-0.001, 0.001)
                 pos_alt += random.uniform(-10, 10)
                 ori_pit = random.gauss(0, 15)
                 ori_yaw = random.gauss(0, 15)
                 ori_rol = random.gauss(0, 15)
-                temp += random.uniform(-0.5, 0.5)
+                tmp += random.uniform(-0.5, 0.5)
                 cpu += random.uniform(-25, 25)
                 batt -= random.uniform(1, 1.5)
 
-            if activity == "welding":
-                temp += random.uniform(-0.5, 2.5)
+            if act == "welding":
+                tmp += random.uniform(-0.5, 2.5)
                 cpu += random.uniform(-25, 25)
                 batt -= random.uniform(1, 1.5)
 
-            pos_alt = max(min(temp, 100), 0)
-            temp = max(min(temp, 90), 25)
+            pos_alt = max(min(pos_alt, 100), 0)
+            tmp = max(min(tmp, 90), 25)
             cpu = max(min(cpu, 100), 0)
             batt = max(min(cpu, 100), 0)
 
@@ -159,7 +159,7 @@ class Drone:
                 ori = (ori_pit, ori_yaw, ori_rol)
                 await self.node.set(f"{name}-position", str(pos), group)
                 await self.node.set(f"{name}-orientation", str(ori), group)
-                await self.node.set(f"{name}-temperature", str(temp), group)
+                await self.node.set(f"{name}-temperature", str(tmp), group)
                 await self.node.set(f"{name}-cpu_usage", str(cpu), group)
                 await self.node.set(f"{name}-battery", str(batt), group)
 

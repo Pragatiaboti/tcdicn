@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import time
 from tcdicn import Node
 from typing import List
 
@@ -85,32 +86,67 @@ class Inspector:
             ttl: float, tpf: int, ttp: float):
 
         async def start_monitoring_drone(drone):
-            positions = []
-            orientations = []
-            temperatures = []
-            cpu_usages = []
-            batteries = []
-            activity = None
+            latest = time.time()
+            poss = []
+            oris = []
+            tmps = []
+            cpus = []
+            bats = []
+            act = None
 
             async def start_checking_drone():
+                interval = 10
+                prev_status = []
+                poss_trend = 0
+                tmps_trend = 0
+                cpus_trend = 0
+
                 while True:
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(interval)
+                    status = []
 
-                    # TODO: check drone stats:
-                    # no message >3 mins
-                    # position unchanged >3 mins
-                    # any orientation >45
-                    # temperature >80 >3 mins
-                    # cpu_usage >90 >3 mins
-                    # battery < 10
+                    # No contact for more than 3 minutes
+                    if time.time() - latest > 3 * 60:
+                        status.append(f"LAST={latest}")
 
-                    logging.info("Sending status")
-                    for group in groups:
-                        await self.node.set(f"{drone}-status", "TODO", group)
+                    # Position unchanged for more than 3 minutes
+                    if len(poss) < 2 or poss[0] != poss[1]:
+                        poss_trend = 0
+                    else:
+                        poss_trend += 1
+                        if poss_trend > 3 * 60 / interval:
+                            status.append(f"POS={poss[0]}%")
+
+                    # Temperature >= 80°C for more than 1 minute
+                    if len(tmps) < 1 or tmps[0] < 80:
+                        tmps_trend = 0
+                    else:
+                        tmps_trend += 1
+                        if tmps_trend > 60 / interval:
+                            status.append(f"TMP={tmps[0]}°C")
+
+                    # CPU usage >= 90% for more than 1 minute
+                    if len(cpus) < 1 or cpus[0] < 90:
+                        cpus_trend = 0
+                    else:
+                        cpus_trend += 1
+                        if cpus_trend > 60 / interval:
+                            status.append(f"CPU={cpus[0]}%")
+
+                    # Battery < 10%
+                    if len(bats) > 0 and bats[0] < 10:
+                        status.append(f"BAT={bats[0]}%")
+
+                    if status != prev_status:
+                        prev_status = status
+                        status = ", ".join(status)
+                        logging.info("Sending %s status: %s", drone, status)
+                        for group in groups:
+                            await self.node.set(
+                                f"{drone}-status", status, group)
 
             async def start_monitoring_drone_group(group):
-                nonlocal positions, orientations, temperatures
-                nonlocal cpu_usages, batteries, activity
+                nonlocal latest, poss, oris, tmps, cpus, bats, act
                 tasks = set()
 
                 def subscribe(label):
@@ -135,18 +171,19 @@ class Inspector:
                         label = task.get_name()
                         value = task.result()
                         logging.debug("Latest %s = %s", label, value)
+                        latest = time.time()
                         if label == f"{drone}-position":
-                            positions = [value] + positions[:10]
+                            poss = [value] + poss[:10]
                         elif label == f"{drone}-orientation":
-                            orientations = [value] + orientations[:10]
+                            oris = [value] + oris[:10]
                         elif label == f"{drone}-temperature":
-                            temperatures = [value] + temperatures[:10]
+                            tmps = [float(value)] + tmps[:10]
                         elif label == f"{drone}-cpu_usage":
-                            cpu_usages = [value] + cpu_usages[:10]
+                            cpus = [float(value)] + cpus[:10]
                         elif label == f"{drone}-battery":
-                            batteries = [value] + batteries[:10]
+                            bats = [float(value)] + bats[:10]
                         elif label == f"{drone}-activity":
-                            activity = value
+                            act = value
                         subscribe(label)
 
             # Subscribe in every group

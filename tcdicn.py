@@ -39,7 +39,7 @@ TCP_TIMEOUT: float = 2
 DATA_TIMEOUT: float = 2
 
 # Seconds to wait before retrying after exhausting all known routes to client
-DEADLINE_EXT: float = 10
+DEADLINE_EXT: float = 5
 
 # How many group keys to keep in case we receive encrypted data using old key
 GROUP_KEY_HISTORY: int = 3
@@ -677,7 +677,7 @@ class Node:
                 if client in self.routes:
                     routes = self.routes[client]
                 rejects.append((deadline + DEADLINE_EXT, client, routes, item))
-                log.warning("No route to %s", client)
+                log.debug("No route to %s, retrying later...", client)
                 continue
 
             if addr is None:
