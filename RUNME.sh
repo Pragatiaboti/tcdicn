@@ -2,6 +2,10 @@
 
 hash openssl || { echo "Sorry, OpenSSL is required to generate client keypairs"; exit 1; }
 
+echo
+echo "Depending on the scenario, you will likely want to open a couple terminal windows to see all nodes in action at once."
+echo "If you are planning on running the Raspberry Pis scenario, you will need to open up 7 SSH sessions on two different Pis (such as rasp-018 and rasp-036)."
+echo
 echo "Choose scenario:"
 echo "  [1] ./simulations/docker/basic.sh - A drone, inspector and controller"
 echo "  [2] ./simulations/docker/groups.sh - 2 groups of drones and inspectors under 2 controllers"

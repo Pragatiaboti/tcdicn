@@ -1,0 +1,42 @@
+Group 18
+
+Pragati Aboti - 23339410 - M.Sc Data Science
+Ted Johnson - 19335618 - M.Sc CS (5 year)
+Xin Wang - 23361770 - M.Sc Futured Networking Systems
+Yi Yang - 23330087 - M.Sc Data Science
+
+
+HIGH LEVEL DESCRIPTION OF PROJECT
+
+We have chosen to imagine fleets of near-future mobile construction and repair drones operating within hazardous or inaccessible environments. Specifically, we aimed to facilitate the secure monitoring and control of the fleet without the need for direct drone-to-operator communication. That is, messages need to be produced, relayed and consumed across ad hoc networks by utilising intelligent discovery and routing techniques. On the surface, this system consists of three applications:
+
+- Drones: Reports vehicle sensor readings and executes received commands
+- Inspectors: Collect readings of known drones and publish alerts and reports
+- Controllers: Operator terminals which notifications alerts and send commands
+
+See the provided REPORT.pdf for much more detail on our project.
+
+
+INSTRUCTIONS TO RUN PROJECT DEMONSTRATION
+
+Requires Python >= 3.8 and OpenSSL to be installed
+
+Depends on the cryptography Python module
+If not installed (it's a pretty popular module so it likely is), install it inside a venv:
+
+    python3 -m venv venv
+    . ./venv/bin/activate
+    pip3 install cryptography
+
+Unfortunately, demonstration of this project requires a little bit of effort as "device instances" are instantiated as separate processes, and some processes depend on the public key of others.
+As such, it is much easier to get everything running using Docker and we recommend it. If you have it installed, you should just be able to run the 3 Docker scenarios with minimal hassle.
+Otherwise, if you want to run everything manually on two Raspberry Pis, you will need to copy some public key files around. You will also need to open about 14 SSH terminal sessions.
+In either case, running this script will walk you through your chosen method (but if you do have any trouble, you can contact Ted at edjohnso@tcd.ie):
+
+    ./RUNME.sh
+
+If you want a lot more log output from the applications to see what's actually happening, run the scenario with debug verbosity enabled:
+
+    TCDICN_VERBOSITY=dbug ./RUNME.sh
+
+Good luck!

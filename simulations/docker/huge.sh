@@ -24,8 +24,6 @@ echo "C is a controller in group 1"
 echo "J is a controller in group 2"
 echo "N is a controller in group 3"
 echo
-echo "Good luck!"
-echo
 
 # Create networks and containers
 docker network create cs7ns1-18-huge-AB
