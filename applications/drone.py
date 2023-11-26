@@ -1,4 +1,4 @@
-# Responsibility of Xin
+# Responsibility of Xin Wang
 import asyncio
 import logging
 import os
