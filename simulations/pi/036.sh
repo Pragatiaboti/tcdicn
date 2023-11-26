@@ -1,7 +1,7 @@
 #!/bin/sh
 
 tmp="/tmp/cs7ns1-18"
-hash openssl scp || exit 1
+hash openssl || exit 1
 rm -rf "$tmp" && mkdir -p "$tmp" || exit 1
 
 echo

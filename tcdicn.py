@@ -1,3 +1,4 @@
+# Responsibility of Ted Johnson
 import asyncio
 import base64
 import fcntl
@@ -867,7 +868,7 @@ class Node:
         if self.advert is not None:
             writer.write((f"- Client name: {self.advert.client}\r\n").encode())
             writer.write((f"- Published labels: {self.advert.labels}\r\n").encode())
-            writer.write((f"- Groups: {self.groups.key()}\r\n").encode())
+            writer.write((f"- Groups: {list(self.groups.keys())}\r\n").encode())
         writer.write(b"Known peers:\r\n")
         for peer, info in self.peers.items():
             writer.write((f"- {peer}: expires {to_human(info.eol)}\r\n").encode())
@@ -880,7 +881,7 @@ class Node:
                 writer.write((f"- {client}: peer={info[0]['addr']} score={info[0]['score']}\r\n").encode())
         writer.write(b"Known interests:\r\n")
         for label, info in self.interests.items():
-            writer.write((f"- {label}: clients={info.keys()}\r\n").encode())
+            writer.write((f"- {label}: clients={list(info.keys())}\r\n").encode())
 
         writer.close()
 
