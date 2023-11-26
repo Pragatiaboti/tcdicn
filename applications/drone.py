@@ -4,6 +4,7 @@ import os
 import random
 import sys
 from tcdicn import Node
+from typing import List
 
 
 class Drone:
@@ -19,9 +20,12 @@ class Drone:
 
         # The labels this drone can publish to
         labels = [
-            f"{name}-xposition",
-            f"{name}-yposition",
-            f"{name}-temperature"
+            f"{name}-position",
+            f"{name}-orientation",
+            f"{name}-temperature",
+            f"{name}-cpu_usage",
+            f"{name}-battery",
+            f"{name}-activity"
         ]
 
         # ICN client node called name publishes these labels and needs
@@ -29,7 +33,7 @@ class Drone:
         client = {}
         client["name"] = name
         client["ttp"] = ttp
-        client["labels"] = [] if groups else labels
+        client["labels"] = []
         if keyfile is not None:
             with open(keyfile, "rb") as f:
                 client["key"] = f.read()
@@ -45,12 +49,12 @@ class Drone:
         # GROUP1:CLIENT1_KEY,CLIENT2_KEY GROUP2:CLIENT3_KEY,CLIENT4_KEY
         logging.info("Joining groups...")
         group_tasks = {}
-        for group in groups.split(" ") if groups else []:
+        for group in groups.split(" "):
             [group, public_key_files] = group.split(":")
             group_tasks[group] = []
             for public_key_file in public_key_files.split(","):
                 [client, ext] = os.path.basename(public_key_file).split(".", 1)
-                assert ext == "public.pem"
+                assert ext == "pub.pem"
                 with open(public_key_file, "rb") as f:
                     public_key = f.read()
                 joiner = self.node.join(
@@ -59,7 +63,8 @@ class Drone:
                 group_tasks[group].append(task)
 
         # Wait until at least one client in every group has been joined with
-        logging.info("Waiting for all groups be joined...")
+        groups = list(group_tasks.keys())
+        logging.info("Waiting for all groups be joined: %s", groups)
         for tasks in group_tasks.values():
             done, tasks = await asyncio.wait(
                 tasks + [node_task], return_when=asyncio.FIRST_COMPLETED)
@@ -69,72 +74,141 @@ class Drone:
         # Start drone
         logging.info("Starting drone...")
         sensors_task = asyncio.create_task(
-            self.start_sensing(name))
+            self.start_sensing(name, groups))
         obeying_task = asyncio.create_task(
-            self.start_obeying(name, ttl, tpf, ttp))
+            self.start_obeying(name, groups, get_ttl, get_tpf, get_ttp))
 
         # Run until shutdown
         tasks = [node_task, sensors_task, obeying_task]
         _, end = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        for task in end:
-            task.cancel()
-        await asyncio.wait(end)
+        if len(end) != 0:
+            for task in end:
+                task.cancel()
+            await asyncio.wait(end)
+        logging.info("Stopped drone")
 
-    async def start_sensing(self, name):
-        xposition = random.uniform(-1, 1)
-        yposition = random.uniform(-1, 1)
-        temperature = random.uniform(15, 25)
-        cpu_usage = random.uniform(0, 100)
-        battery_level = random.uniform(0, 100)
-        # Simulate additional sensor data
-        lat = random.uniform(-90, 90)
-        lon = random.uniform(-180, 180)
-        alt = random.uniform(0, 10000)  # Altitude in meters
-        pitch = random.uniform(-90, 90)  # Pitch angle
-        roll = random.uniform(-90, 90)   # Roll angle
-        yaw = random.uniform(-180, 180)  # Yaw angle
-        activity = random.choice(["idle", "moving", "working"])  # Activity status
+    async def start_sensing(self, name: str, groups: List[str]):
 
+        # Simulated sensors
+        pos_lat = random.uniform(-0.01, 0.01)
+        pos_lon = random.uniform(-0.01, 0.01)
+        pos_alt = random.uniform(25, 75)
+        ori_pit = random.uniform(0, 25)
+        ori_yaw = random.uniform(0, 25)
+        ori_rol = random.uniform(0, 25)
+        temp = random.uniform(25, 90)
+        cpu = random.uniform(0, 100)
+        batt = random.uniform(90, 100)
+
+        # Simulated activity
+        activities = ["charging", "moving", "hauling", "welding"]
+        previous_activity = None
         while True:
-            await asyncio.sleep(random.uniform(4, 6))
+            activity = random.choice(activities)
 
-            # Update sensor values
-            xposition += random.uniform(-0.1, 0.1)
-            yposition += random.uniform(-0.1, 0.1)
-            temperature += random.uniform(-0.5, 0.5)
-            cpu_usage += random.uniform(-10, 10)
-            battery_level -= random.uniform(0, 10)  # Assuming battery level decreases
-            # Ensure battery level stays within bounds
-            battery_level = max(0, min(battery_level, 100))
+            if activity != previous_activity:
+                logging.info(f"New activity: {activity}")
+                for group in groups:
+                    await self.node.set(f"{name}-activity", "charging", group)
+                previous_activity = activity
+            else:
+                logging.debug(f"Activity: {activity}")
 
-            lat += random.uniform(-10, 10)
-            lon += random.uniform(-10, 10)
-            alt -= random.uniform(0, 10)
-            pitch += random.uniform(-0.5, 0.5)
-            roll += random.uniform(-10, 10)
-            yaw += random.uniform(-10, 10)
-            activity = random.choice(["idle", "moving", "working"])  
+            await asyncio.sleep(random.uniform(10, 30))
 
-            # Publish all sensor data
-            await self.node.set(f"{name}-xposition", str(xposition))
-            await self.node.set(f"{name}-yposition", str(yposition))
-            await self.node.set(f"{name}-temperature", str(temperature))
-            await self.node.set(f"{name}-cpu", str(cpu_usage))
-            await self.node.set(f"{name}-battery", str(battery_level))
-            await self.node.set(f"{name}-position", f"({lat}, {lon}, {alt})")
-            await self.node.set(f"{name}-orientation", f"({pitch}, {roll}, {yaw})")
-            await self.node.set(f"{name}-activity", activity)
+            if activity == "charging":
+                temp += random.uniform(-1.5, 0.5)
+                cpu += random.uniform(-25, 25)
+                batt += random.uniform(3, 3.5)
 
-    async def start_obeying(self, name, ttl, tpf, ttp):
-        while True:
-            # 为 get 方法提供必需的参数
-            fleet_command = await self.node.get("fleet-command", ttl, tpf, ttp)
-            drone_command = await self.node.get(f"{name}-command", ttl, tpf, ttp)
-            print(f"New fleet command: {fleet_command}")
-            print(f"New command for {name}: {drone_command}")
+            if activity == "moving":
+                pos_lat += random.uniform(-0.002, 0.002)
+                pos_lon += random.uniform(-0.002, 0.002)
+                pos_alt += random.uniform(-20, 20)
+                ori_pit = random.gauss(0, 15)
+                ori_yaw = random.gauss(0, 15)
+                ori_rol = random.gauss(0, 15)
+                temp += random.uniform(-1.5, 0.5)
+                cpu += random.uniform(-25, 25)
+                batt -= random.uniform(0.5, 1)
 
-            # Sleep for a short duration to simulate a waiting period for new commands            
-            await asyncio.sleep(float("inf"))
+            if activity == "hauling":
+                pos_lat += random.uniform(-0.001, 0.001)
+                pos_lon += random.uniform(-0.001, 0.001)
+                pos_alt += random.uniform(-10, 10)
+                ori_pit = random.gauss(0, 15)
+                ori_yaw = random.gauss(0, 15)
+                ori_rol = random.gauss(0, 15)
+                temp += random.uniform(-0.5, 0.5)
+                cpu += random.uniform(-25, 25)
+                batt -= random.uniform(1, 1.5)
+
+            if activity == "welding":
+                temp += random.uniform(-0.5, 2.5)
+                cpu += random.uniform(-25, 25)
+                batt -= random.uniform(1, 1.5)
+
+            pos_alt = max(min(temp, 100), 0)
+            temp = max(min(temp, 90), 25)
+            cpu = max(min(cpu, 100), 0)
+            batt = max(min(cpu, 100), 0)
+
+            logging.debug("Publishing sensor data...")
+            for group in groups:
+                pos = (pos_lat, pos_lon, pos_alt)
+                ori = (ori_pit, ori_yaw, ori_rol)
+                await self.node.set(f"{name}-position", str(pos), group)
+                await self.node.set(f"{name}-orientation", str(ori), group)
+                await self.node.set(f"{name}-temperature", str(temp), group)
+                await self.node.set(f"{name}-cpu_usage", str(cpu), group)
+                await self.node.set(f"{name}-battery", str(batt), group)
+
+    async def start_obeying(
+            self, name: str, groups: List[str],
+            ttl: float, tpf: int, ttp: float):
+
+        async def start_obeying_group(group):
+            tasks = set()
+
+            def subscribe(label):
+                logging.debug("Subscribing to %s//%s...", group, label)
+                getter = self.node.get(label, ttl, tpf, ttp, group)
+                task = asyncio.create_task(getter, name=label)
+                tasks.add(task)
+
+            # Add initial subscriptions
+            subscribe(f"{name}-command")
+            subscribe("fleet-command")
+
+            try:
+                # Handle completed subscriptions then resubscribe
+                while True:
+                    done, tasks = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED)
+                    for task in done:
+                        label = task.get_name()
+                        command = task.result()
+                        logging.info("New %s: %s", label, command)
+                        if command == "shutdown":
+                            logging.info("Stopping drone...")
+                            raise asyncio.exceptions.CancelledError()
+                        subscribe(label)
+            except asyncio.exceptions.CancelledError:
+                # Clean up remaining getter tasks
+                if len(tasks) != 0:
+                    for task in tasks:
+                        task.cancel()
+                    await asyncio.wait(tasks)
+
+        # Subscribe to fleet and drone commands in every group
+        tasks = []
+        for group in groups:
+            tasks.append(asyncio.create_task(start_obeying_group(group)))
+        _, end = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        if len(end) != 0:
+            for task in end:
+                task.cancel()
+            await asyncio.wait(end)
 
 
 async def main():
@@ -144,15 +218,19 @@ async def main():
     wport = int(os.getenv("TCDICN_WPORT") or 0)  # Optional debug web server
     ttl = float(os.getenv("TCDICN_TTL") or 30)  # Forget me after 30s
     tpf = int(os.getenv("TCDICN_TPF") or 3)  # Remind peers every 30/3s
-    ttp = float(os.getenv("TCDICN_TTP") or 5)  # Repeat my adverts before 5s
+    ttp = float(os.getenv("TCDICN_TTP") or 3)  # Repeat my adverts before 3s
     get_ttl = float(os.getenv("TCDICN_GET_TTL") or 90)  # Forget my interest
     get_tpf = int(os.getenv("TCDICN_GET_TPF") or 2)  # Remind about my interest
-    get_ttp = float(os.getenv("TCDICN_GET_TTP") or 0.5)  # Deadline to respond
-    keyfile = os.getenv("TCDICN_KEYFILE") or None  # Private keyfile path
-    groups = os.getenv("TCDICN_GROUPS") or ""  # Which groups to join
+    get_ttp = float(os.getenv("TCDICN_GET_TTP") or 0)  # Deadline to respond
+    keyfile = os.getenv("TCDICN_KEYFILE")  # Private keyfile path
+    groups = os.getenv("TCDICN_GROUPS")  # Which groups to join
     verb = os.getenv("TCDICN_VERBOSITY") or "info"  # Logging verbosity
-    if name is None:
-        sys.exit("Please give client a unique ID by setting TCDICN_ID")
+    if not name:
+        sys.exit("Define drone's unique ID by setting TCDICN_ID")
+    if not keyfile:
+        sys.exit("Define drone's keyfile by setting TCDICN_KEYFILE")
+    if not groups:
+        sys.exit("Define drone's groups by setting TCDICN_GROUPS")
 
     # Logging verbosity
     verbs = {"dbug": logging.DEBUG, "info": logging.INFO, "warn": logging.WARN}

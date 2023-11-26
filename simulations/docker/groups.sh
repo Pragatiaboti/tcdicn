@@ -31,46 +31,38 @@ docker network create cs7ns1-18-groups-DY
 docker network create cs7ns1-18-groups-EY
 docker network create cs7ns1-18-groups-FY
 docker network create cs7ns1-18-groups-XY
-docker create --name cs7ns1-18-groups-A -e "TCDICN_ID=A" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.public.pem"                                             -e "SCRIPT=drone.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-B -e "TCDICN_ID=B" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=2:/C.public.pem"                                             -e "SCRIPT=inspector.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-C -e "TCDICN_ID=C" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.public.pem 2:/B.public.pem,/D.public.pem,/F.public.pem" -e "SCRIPT=controller.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-D -e "TCDICN_ID=D" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=2:/C.public.pem"                                             -e "SCRIPT=drone.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-E -e "TCDICN_ID=E" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.public.pem"                                             -e "SCRIPT=inspector.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-F -e "TCDICN_ID=F" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.public.pem,/C.public.pem,/E.public.pem 2:/C.public.pem" -e "SCRIPT=controller.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-X -e "SCRIPT=node.py" cs7ns1-18
-docker create --name cs7ns1-18-groups-Y -e "SCRIPT=node.py" cs7ns1-18
-docker network connect cs7ns1-18-groups-AX cs7ns1-18-groups-A
+docker create --name cs7ns1-18-groups-A --network cs7ns1-18-groups-AX -e "TCDICN_ID=A" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.pub.pem"                                    -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=drone.py" cs7ns1-18
+docker create --name cs7ns1-18-groups-B --network cs7ns1-18-groups-BX -e "TCDICN_ID=B" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=2:/C.pub.pem"                                    -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=inspector.py" -e "KNOWN_DRONES=D" cs7ns1-18
+docker create --name cs7ns1-18-groups-C --network cs7ns1-18-groups-CX -e "TCDICN_ID=C" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.pub.pem 2:/B.pub.pem,/D.pub.pem,/F.pub.pem" -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=controller.py" -e "KNOWN_DRONES=A,D" cs7ns1-18
+docker create --name cs7ns1-18-groups-D --network cs7ns1-18-groups-DY -e "TCDICN_ID=D" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=2:/C.pub.pem"                                    -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=drone.py" cs7ns1-18
+docker create --name cs7ns1-18-groups-E --network cs7ns1-18-groups-EY -e "TCDICN_ID=E" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/F.pub.pem"                                    -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=inspector.py" -e "KNOWN_DRONES=A" cs7ns1-18
+docker create --name cs7ns1-18-groups-F --network cs7ns1-18-groups-FY -e "TCDICN_ID=F" -e "TCDICN_KEYFILE=/key.pem" -e "TCDICN_GROUPS=1:/A.pub.pem,/C.pub.pem,/E.pub.pem 2:/C.pub.pem" -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=controller.py" -e "KNOWN_DRONES=A,D" cs7ns1-18
+docker create --name cs7ns1-18-groups-X --network cs7ns1-18-groups-XY                                                                                                                  -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=node.py" cs7ns1-18
+docker create --name cs7ns1-18-groups-Y --network cs7ns1-18-groups-XY                                                                                                                  -e "TCDICN_VERBOSITY=$TCDICN_VERBOSITY" -e "SCRIPT=node.py" cs7ns1-18
 docker network connect cs7ns1-18-groups-AX cs7ns1-18-groups-X
-docker network connect cs7ns1-18-groups-BX cs7ns1-18-groups-B
 docker network connect cs7ns1-18-groups-BX cs7ns1-18-groups-X
-docker network connect cs7ns1-18-groups-CX cs7ns1-18-groups-C
 docker network connect cs7ns1-18-groups-CX cs7ns1-18-groups-X
-docker network connect cs7ns1-18-groups-DY cs7ns1-18-groups-D
 docker network connect cs7ns1-18-groups-DY cs7ns1-18-groups-Y
-docker network connect cs7ns1-18-groups-EY cs7ns1-18-groups-E
 docker network connect cs7ns1-18-groups-EY cs7ns1-18-groups-Y
-docker network connect cs7ns1-18-groups-FY cs7ns1-18-groups-F
 docker network connect cs7ns1-18-groups-FY cs7ns1-18-groups-Y
-docker network connect cs7ns1-18-groups-XY cs7ns1-18-groups-X
-docker network connect cs7ns1-18-groups-XY cs7ns1-18-groups-Y
 
 # Generate keypairs and distribute public keys
-openssl genrsa -out "$tmp/A.pem" 2048 && openssl rsa -in "$tmp/A.pem" -pubout -out "$tmp/A.public.pem" && docker cp "$tmp/A.pem" cs7ns1-18-groups-A:/key.pem || exit 1
-openssl genrsa -out "$tmp/B.pem" 2048 && openssl rsa -in "$tmp/B.pem" -pubout -out "$tmp/B.public.pem" && docker cp "$tmp/B.pem" cs7ns1-18-groups-B:/key.pem || exit 1
-openssl genrsa -out "$tmp/C.pem" 2048 && openssl rsa -in "$tmp/C.pem" -pubout -out "$tmp/C.public.pem" && docker cp "$tmp/C.pem" cs7ns1-18-groups-C:/key.pem || exit 1
-openssl genrsa -out "$tmp/D.pem" 2048 && openssl rsa -in "$tmp/D.pem" -pubout -out "$tmp/D.public.pem" && docker cp "$tmp/D.pem" cs7ns1-18-groups-D:/key.pem || exit 1
-openssl genrsa -out "$tmp/E.pem" 2048 && openssl rsa -in "$tmp/E.pem" -pubout -out "$tmp/E.public.pem" && docker cp "$tmp/E.pem" cs7ns1-18-groups-E:/key.pem || exit 1
-openssl genrsa -out "$tmp/F.pem" 2048 && openssl rsa -in "$tmp/F.pem" -pubout -out "$tmp/F.public.pem" && docker cp "$tmp/F.pem" cs7ns1-18-groups-F:/key.pem || exit 1
-docker cp "$tmp/A.public.pem" cs7ns1-18-groups-F:/ || exit 1
-docker cp "$tmp/B.public.pem" cs7ns1-18-groups-C:/ || exit 1
-docker cp "$tmp/C.public.pem" cs7ns1-18-groups-B:/ || exit 1
-docker cp "$tmp/C.public.pem" cs7ns1-18-groups-D:/ || exit 1
-docker cp "$tmp/C.public.pem" cs7ns1-18-groups-F:/ || exit 1
-docker cp "$tmp/D.public.pem" cs7ns1-18-groups-C:/ || exit 1
-docker cp "$tmp/E.public.pem" cs7ns1-18-groups-F:/ || exit 1
-docker cp "$tmp/F.public.pem" cs7ns1-18-groups-A:/ || exit 1
-docker cp "$tmp/F.public.pem" cs7ns1-18-groups-C:/ || exit 1
-docker cp "$tmp/F.public.pem" cs7ns1-18-groups-E:/ || exit 1
+openssl genrsa -out "$tmp/A.pem" 2048 && openssl rsa -in "$tmp/A.pem" -pubout -out "$tmp/A.pub.pem" && docker cp "$tmp/A.pem" cs7ns1-18-groups-A:/key.pem || exit 1
+openssl genrsa -out "$tmp/B.pem" 2048 && openssl rsa -in "$tmp/B.pem" -pubout -out "$tmp/B.pub.pem" && docker cp "$tmp/B.pem" cs7ns1-18-groups-B:/key.pem || exit 1
+openssl genrsa -out "$tmp/C.pem" 2048 && openssl rsa -in "$tmp/C.pem" -pubout -out "$tmp/C.pub.pem" && docker cp "$tmp/C.pem" cs7ns1-18-groups-C:/key.pem || exit 1
+openssl genrsa -out "$tmp/D.pem" 2048 && openssl rsa -in "$tmp/D.pem" -pubout -out "$tmp/D.pub.pem" && docker cp "$tmp/D.pem" cs7ns1-18-groups-D:/key.pem || exit 1
+openssl genrsa -out "$tmp/E.pem" 2048 && openssl rsa -in "$tmp/E.pem" -pubout -out "$tmp/E.pub.pem" && docker cp "$tmp/E.pem" cs7ns1-18-groups-E:/key.pem || exit 1
+openssl genrsa -out "$tmp/F.pem" 2048 && openssl rsa -in "$tmp/F.pem" -pubout -out "$tmp/F.pub.pem" && docker cp "$tmp/F.pem" cs7ns1-18-groups-F:/key.pem || exit 1
+docker cp "$tmp/A.pub.pem" cs7ns1-18-groups-F:/ || exit 1
+docker cp "$tmp/B.pub.pem" cs7ns1-18-groups-C:/ || exit 1
+docker cp "$tmp/C.pub.pem" cs7ns1-18-groups-B:/ || exit 1
+docker cp "$tmp/C.pub.pem" cs7ns1-18-groups-D:/ || exit 1
+docker cp "$tmp/C.pub.pem" cs7ns1-18-groups-F:/ || exit 1
+docker cp "$tmp/D.pub.pem" cs7ns1-18-groups-C:/ || exit 1
+docker cp "$tmp/E.pub.pem" cs7ns1-18-groups-F:/ || exit 1
+docker cp "$tmp/F.pub.pem" cs7ns1-18-groups-A:/ || exit 1
+docker cp "$tmp/F.pub.pem" cs7ns1-18-groups-C:/ || exit 1
+docker cp "$tmp/F.pub.pem" cs7ns1-18-groups-E:/ || exit 1
 
 echo
 echo "Run each of the following commands in different terminals to run the simulated nodes:"
@@ -83,6 +75,11 @@ echo "  docker start -a cs7ns1-18-groups-F"
 echo "  docker start -a cs7ns1-18-groups-X"
 echo "  docker start -a cs7ns1-18-groups-Y"
 echo "Use Control-C to shutdown a node, then restart it again with the same command."
+echo "Alternatively, run the following command to start all simulated nodes at once:"
+echo "  docker start cs7ns1-18-groups-A cs7ns1-18-groups-B cs7ns1-18-groups-C cs7ns1-18-groups-D cs7ns1-18-groups-E cs7ns1-18-groups-F cs7ns1-18-groups-X cs7ns1-18-groups-Y"
+echo "Then attach to the nodes you care about with a command like:"
+echo "  docker logs --follow cs7ns1-18-groups-A"
+echo "Rerun this script with \"TCDICN_VERBOSITY=dbug \" prepended to get more verbose output from containers."
 echo
 read -p "Press Enter to stop simulation..."
 

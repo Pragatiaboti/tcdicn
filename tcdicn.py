@@ -41,6 +41,9 @@ DATA_TIMEOUT: float = 2
 # Seconds to wait before retrying after exhausting all known routes to client
 DEADLINE_EXT: float = 10
 
+# How many group keys to keep in case we receive encrypted data using old key
+GROUP_KEY_HISTORY: int = 3
+
 # Peers are identified solely by their host and port number
 Addr = Tuple[str, int]
 
@@ -293,7 +296,7 @@ class Group:
         self.labels: List[str] = []
         self.encrypted_labels: List[str] = []
         self.keys: Dict[str, rsa.RSAPublicKey] = {}
-        self.key: Fernet = None
+        self.key: List[Fernet] = []
         self.raw: bytes = None
         self.at: float = 0
 
@@ -430,7 +433,7 @@ class Node:
         if group is not None:
             # TODO(security): stable label encryption
             label = group + "//" + label
-            # label = self.groups[group].key.encrypt(label.encode())
+            # label = self.groups[group].key[0].encrypt(label.encode())
             # label = base64.b64encode(label).decode("ASCII")
             log.debug("Used group %s key to encrypt label: %s", group, label)
 
@@ -469,16 +472,26 @@ class Node:
             task.cancel()
 
         # Grab new data and decrypt
-        self.content_store[label].last = self.content_store[label].at
         data = self.content_store[label].data
         if group is not None:
-            try:
-                data = base64.b64decode(data)
-                data = self.groups[group].key.decrypt(data).decode()
-                log.debug("Decrypted received data with group %s key", group)
-            except InvalidToken:
+            data = base64.b64decode(data)
+            for idx, key in enumerate(self.groups[group].key):
+                try:
+                    data = key.decrypt(data).decode()
+                    log.debug(
+                        "Decrypted received data with group %s key %s",
+                        group, idx)
+                    break
+                except InvalidToken:
+                    log.debug(
+                        "Unable to decrypt received data with group %s key %s",
+                        group, idx)
+                    continue
+            else:
                 log.warning("Unable to decrypt group %s data", group)
-                data = self.get(label, ttl, tpf, ttp, group)
+                await asyncio.sleep(DEADLINE_EXT)
+                data = await self.get(label, ttl, tpf, ttp, group)
+        self.content_store[label].last = self.content_store[label].at
         return data
 
     # Publishes a new value to a label
@@ -490,11 +503,11 @@ class Node:
 
         # Encrypt label and data
         if group is not None:
-            data = self.groups[group].key.encrypt(data.encode())
+            data = self.groups[group].key[0].encrypt(data.encode())
             data = base64.b64encode(data).decode("ASCII")
             # TODO(security): stable label encryption
             label = group + "//" + label
-            # label = self.groups[group].key.encrypt(label.encode())
+            # label = self.groups[group].key[0].encrypt(label.encode())
             # label = base64.b64encode(label).decode("ASCII")
             log.debug("Used group key to encrypt label and data: %s", label)
 
@@ -556,7 +569,7 @@ class Node:
 
                 # If neither us nor they have a group key, create a new one
                 if inner["at"] == 0 and self.groups[group].at == 0:
-                    log.debug("Generated new group key")
+                    log.info("Generated new group key")
                     self.groups[group].raw = Fernet.generate_key()
                     self.groups[group].at = time.time()
                     break
@@ -574,13 +587,14 @@ class Node:
                 invite = base64.b64decode(invites[self.advert.client])
 
                 # Decrypt and accept the group key
-                log.debug("Received new group key")
+                log.info("Received new group key")
                 self.groups[group].raw = decrypt(self.key, invite)
                 self.groups[group].at = inner["at"]
                 break
 
             # After obtaining a new group key, update our encrypted labels
-            self.groups[group].key = Fernet(self.groups[group].raw)
+            self.groups[group].key = [Fernet(self.groups[group].raw)] \
+                + self.groups[group].key[:GROUP_KEY_HISTORY]
             self.advert.labels = [
                 label for label in self.advert.labels
                 if label not in self.groups[group].encrypted_labels]
@@ -588,7 +602,7 @@ class Node:
             for label in self.groups[group].labels:
                 # TODO(security): stable label encryption
                 label = group + "//" + label
-                # label = self.groups[group].key.encrypt(label.encode()))
+                # label = self.groups[group].key[0].encrypt(label.encode()))
                 # label = base64.b64encode(label).decode("ASCII")
                 self.groups[group].encrypted_labels.append(label)
             self.advert.labels.extend(self.groups[group].encrypted_labels)
