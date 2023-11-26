@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from asyncio import Task, Future, DatagramTransport, StreamWriter, StreamReader
 from cryptography.exceptions import InvalidSignature
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from json import JSONDecodeError
@@ -351,7 +352,8 @@ class Node:
 
         # Load private key if provided
         self.key = None if client is None or "key" not in client else \
-            serialization.load_pem_private_key(client["key"], password=None)
+            serialization.load_pem_private_key(
+                client["key"], password=None, backend=default_backend())
 
         loop = asyncio.get_running_loop()
 
@@ -533,7 +535,7 @@ class Node:
             self.groups[group] = Group()
             self.groups[group].labels = labels
 
-        key = serialization.load_pem_public_key(key)
+        key = serialization.load_pem_public_key(key, backend=default_backend())
 
         async def publish_invites():
             log.debug("Publishing new invites...")
